@@ -155,17 +155,6 @@ To integrate Traefik into your real project:
 
 ---
 
-## Experiments to Try
-
-- **Add a third app**: Copy the app1 pattern in `docker-compose.yml`, create `app3/index.html`
-- **Scale a service**: `docker compose up -d --scale app1=3` — Traefik load-balances automatically
-- **Change a routing rule**: Edit a label, run `docker compose up -d` — Traefik picks it up live
-- **Add rate limiting**: Add this label to any service:
-  ```
-  traefik.http.middlewares.rate.ratelimit.average=10
-  ```
-- **View Traefik logs**: `docker compose logs -f traefik`
-
 ## Useful Commands
 
 ```bash

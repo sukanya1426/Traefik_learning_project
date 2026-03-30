@@ -1,0 +1,129 @@
+# =============================================================================
+# Traefik Learning Playground
+# =============================================================================
+# This file defines 4 services behind Traefik reverse proxy.
+# Most Traefik configuration lives here in Docker labels.
+#
+# Run: docker compose up -d
+# Stop: docker compose down
+# =============================================================================
+
+services:
+
+  # ===========================================================================
+  # TRAEFIK — The reverse proxy / load balancer
+  # ===========================================================================
+  traefik:
+    image: traefik:v3.6
+    container_name: traefik
+    ports:
+      - "80:80"       # EntryPoint: web (HTTP)
+      - "443:443"     # EntryPoint: websecure (HTTPS)
+      - "8080:8080"   # Dashboard (direct access fallback)
+    volumes:
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro        # Static config
+      - /var/run/docker.sock:/var/run/docker.sock:ro      # Docker provider
+    labels:
+      # Route admin.localhost to the Traefik dashboard
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`admin.localhost`)"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.routers.dashboard.service=api@internal"
+    networks:
+      - traefik-net
+
+  # ===========================================================================
+  # APP 1 — Simple HTML page (Nginx)
+  # Demonstrates: domain routing, path routing, stripprefix middleware
+  # ===========================================================================
+  app1:
+    image: nginx:alpine
+    container_name: app1
+    volumes:
+      - ./app1/index.html:/usr/share/nginx/html/index.html:ro
+    labels:
+      - "traefik.enable=true"
+
+      # --- Router 1: Domain-based routing ---
+      # Access via: http://app1.localhost
+      - "traefik.http.routers.app1.rule=Host(`app1.localhost`)"
+      - "traefik.http.routers.app1.entrypoints=web"
+
+      # --- Router 2: Path-based routing ---
+      # Access via: http://localhost/app1
+      - "traefik.http.routers.app1-path.rule=Host(`localhost`) && PathPrefix(`/app1`)"
+      - "traefik.http.routers.app1-path.entrypoints=web"
+      - "traefik.http.routers.app1-path.middlewares=app1-stripprefix"
+
+      # --- Middleware: StripPrefix ---
+      # Removes /app1 from the path before forwarding to Nginx
+      # Without this, Nginx would receive /app1 and return 404
+      - "traefik.http.middlewares.app1-stripprefix.stripprefix.prefixes=/app1"
+    networks:
+      - traefik-net
+
+  # ===========================================================================
+  # APP 2 — Simple HTML page (Nginx)
+  # Demonstrates: same routing + custom response header middleware
+  # ===========================================================================
+  app2:
+    image: nginx:alpine
+    container_name: app2
+    volumes:
+      - ./app2/index.html:/usr/share/nginx/html/index.html:ro
+    labels:
+      - "traefik.enable=true"
+
+      # --- Router 1: Domain-based routing ---
+      # Access via: http://app2.localhost
+      - "traefik.http.routers.app2.rule=Host(`app2.localhost`)"
+      - "traefik.http.routers.app2.entrypoints=web"
+      - "traefik.http.routers.app2.middlewares=app2-headers"
+
+      # --- Router 2: Path-based routing ---
+      # Access via: http://localhost/app2
+      - "traefik.http.routers.app2-path.rule=Host(`localhost`) && PathPrefix(`/app2`)"
+      - "traefik.http.routers.app2-path.entrypoints=web"
+      - "traefik.http.routers.app2-path.middlewares=app2-stripprefix,app2-headers"
+
+      # --- Middleware: StripPrefix ---
+      - "traefik.http.middlewares.app2-stripprefix.stripprefix.prefixes=/app2"
+
+      # --- Middleware: Custom Headers ---
+      # Adds a custom response header (visible with curl -v)
+      - "traefik.http.middlewares.app2-headers.headers.customresponseheaders.X-Served-By=app2"
+    networks:
+      - traefik-net
+
+  # ===========================================================================
+  # API — Mock JSON API (Nginx serving JSON)
+  # Demonstrates: domain routing + basicauth middleware
+  # ===========================================================================
+  api:
+    image: nginx:alpine
+    container_name: api
+    volumes:
+      - ./api/data.json:/usr/share/nginx/html/data.json:ro
+      - ./api/default.conf:/etc/nginx/conf.d/default.conf:ro
+    labels:
+      - "traefik.enable=true"
+
+      # --- Router: Domain-based routing with auth ---
+      # Access via: http://api.localhost (requires username: user, password: traefik)
+      - "traefik.http.routers.api.rule=Host(`api.localhost`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.routers.api.middlewares=api-auth"
+
+      # --- Middleware: Basic Auth ---
+      # Username: user | Password: traefik
+      # Note: $ signs are escaped as $$ in docker-compose
+      - "traefik.http.middlewares.api-auth.basicauth.users=user:$$2y$$05$$8mZ1fMJ5GDqnnSnKolzuZOf4IbFGHEq52oGFbXdK5ewE81FgqTAVG"
+    networks:
+      - traefik-net
+
+# =============================================================================
+# NETWORK — Shared network for all services
+# =============================================================================
+networks:
+  traefik-net:
+    name: traefik-net

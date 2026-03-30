@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>App 2</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 80px auto; text-align: center; }
+        h1 { color: #16a34a; }
+        .badge { background: #16a34a; color: white; padding: 4px 12px; border-radius: 12px; font-size: 14px; }
+        a { color: #16a34a; }
+    </style>
+</head>
+<body>
+    <h1>App 2</h1>
+    <p><span class="badge">Nginx container</span> served behind Traefik</p>
+    <hr>
+    <p>You reached this page via Traefik routing.</p>
+    <p>Check the response headers (<code>curl -v</code>) — you'll see a custom <code>X-Served-By: app2</code> header added by Traefik middleware!</p>
+    <p>Try also:</p>
+    <ul style="list-style: none; padding: 0;">
+        <li><a href="http://app1.localhost">app1.localhost</a> — App 1 (domain routing)</li>
+        <li><a href="http://api.localhost">api.localhost</a> — API (basic auth)</li>
+        <li><a href="http://admin.localhost">admin.localhost</a> — Traefik Dashboard</li>
+    </ul>
+</body>
+</html>

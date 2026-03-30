@@ -1,0 +1,32 @@
+# Traefik Static Configuration
+# This file configures Traefik itself — things that don't change at runtime.
+
+# ============================================================
+# ENTRYPOINTS — Define which ports Traefik listens on
+# ============================================================
+entryPoints:
+  web:
+    address: ":80"        # HTTP traffic
+  websecure:
+    address: ":443"       # HTTPS traffic (not used with TLS in this playground)
+
+# ============================================================
+# API / DASHBOARD — Traefik's built-in web UI
+# ============================================================
+api:
+  dashboard: true         # Enable the dashboard UI
+  insecure: true          # Allow access without TLS (for learning only!)
+
+# ============================================================
+# PROVIDERS — Where Traefik discovers services
+# ============================================================
+providers:
+  docker:
+    exposedByDefault: false   # Containers must opt-in with "traefik.enable=true"
+    watch: true               # Watch for container changes in real-time
+
+# ============================================================
+# LOGGING — Set to DEBUG so you can see what Traefik is doing
+# ============================================================
+log:
+  level: DEBUG

@@ -1,0 +1,65 @@
+# =============================================================================
+# Traefik Static Configuration
+# This file configures Traefik itself — things set once at startup.
+# Dynamic config (routers, middlewares, services) lives in docker-compose labels.
+# =============================================================================
+
+# -----------------------------------------------------------------------
+# ENTRYPOINTS — ports Traefik listens on
+# -----------------------------------------------------------------------
+entryPoints:
+  web:
+    address: ":80"
+    # Redirect ALL HTTP traffic to HTTPS automatically.
+    # Traefik is smart enough to still answer Let's Encrypt HTTP-01
+    # challenges on port 80 even with this redirect in place.
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ":443"
+
+# -----------------------------------------------------------------------
+# PROVIDERS — where Traefik discovers services and routes
+# -----------------------------------------------------------------------
+providers:
+  docker:
+    exposedByDefault: false   # Only containers with traefik.enable=true are picked up
+    watch: true               # Reload config when containers start/stop
+
+# -----------------------------------------------------------------------
+# CERTIFICATES RESOLVERS — automatic TLS via Let's Encrypt
+# -----------------------------------------------------------------------
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      # Let's Encrypt will send important emails (expiry warnings) here.
+      # Overridden by the LETSENCRYPT_EMAIL env var passed from docker-compose.
+      email: "${LETSENCRYPT_EMAIL}"
+      # Where to persist the certificate + private key.
+      # This file must exist on the host with chmod 600 before first run.
+      storage: /letsencrypt/acme.json
+      # HTTP-01 challenge: Let's Encrypt calls back on port 80.
+      # This is the simplest challenge type — no DNS provider needed.
+      httpChallenge:
+        entryPoint: web
+
+# -----------------------------------------------------------------------
+# API / DASHBOARD
+# -----------------------------------------------------------------------
+api:
+  dashboard: true
+  # insecure: false (default) — dashboard is exposed ONLY via a router/middleware
+  # defined in docker-compose labels, never on a raw port
+
+# -----------------------------------------------------------------------
+# LOGGING
+# -----------------------------------------------------------------------
+log:
+  level: INFO   # Use DEBUG when troubleshooting
+
+accessLog: {}   # Log every request (outputs to stdout)

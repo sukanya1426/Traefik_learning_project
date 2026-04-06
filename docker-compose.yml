@@ -1,128 +1,84 @@
 # =============================================================================
-# Traefik Learning Playground
+# Traefik + FastAPI on Hetzner
 # =============================================================================
-# This file defines 4 services behind Traefik reverse proxy.
-# Most Traefik configuration lives here in Docker labels.
+# Prerequisites before first run:
+#   1. Copy .env.example to .env and fill in your values
+#   2. touch traefik/acme.json && chmod 600 traefik/acme.json
+#   3. Your domain's A records must point to this server's IP
 #
-# Run: docker compose up -d
+# Run:  docker compose up -d --build
 # Stop: docker compose down
+# Logs: docker compose logs -f
 # =============================================================================
 
 services:
 
-  # ===========================================================================
-  # TRAEFIK — The reverse proxy / load balancer
-  # ===========================================================================
+  # ---------------------------------------------------------------------------
+  # TRAEFIK — reverse proxy, TLS termination, Let's Encrypt
+  # ---------------------------------------------------------------------------
   traefik:
     image: traefik:v3.6
     container_name: traefik
+    restart: unless-stopped
     ports:
-      - "80:80"       # EntryPoint: web (HTTP)
-      - "443:443"     # EntryPoint: websecure (HTTPS)
-      - "8080:8080"   # Dashboard (direct access fallback)
+      - "80:80"    # HTTP (redirects to HTTPS + ACME challenge)
+      - "443:443"  # HTTPS
+      # Note: no 8080 — dashboard is served through Traefik itself
+    environment:
+      # Passed into traefik.yml via ${LETSENCRYPT_EMAIL} substitution
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
     volumes:
-      - ./traefik.yml:/etc/traefik/traefik.yml:ro        # Static config
-      - /var/run/docker.sock:/var/run/docker.sock:ro      # Docker provider
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro   # Static config (read-only)
+      - ./traefik/acme.json:/letsencrypt/acme.json           # TLS cert + key storage
+      - /var/run/docker.sock:/var/run/docker.sock:ro         # Docker provider
     labels:
-      # Route admin.localhost to the Traefik dashboard
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`admin.localhost`)"
-      - "traefik.http.routers.dashboard.entrypoints=web"
+
+      # --- Traefik Dashboard ---
+      # Accessible at https://traefik.YOURDOMAIN.com  (see .env for DOMAIN)
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+
+      # --- Basic Auth for the Dashboard ---
+      # Generate the hash:  htpasswd -nB admin | sed 's/\$/\$\$/g'
+      # Then replace the value below (keep the $$ escaping for docker-compose)
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
     networks:
       - traefik-net
 
-  # ===========================================================================
-  # APP 1 — Simple HTML page (Nginx)
-  # Demonstrates: domain routing, path routing, stripprefix middleware
-  # ===========================================================================
-  app1:
-    image: nginx:alpine
-    container_name: app1
-    volumes:
-      - ./app1/index.html:/usr/share/nginx/html/index.html:ro
-    labels:
-      - "traefik.enable=true"
-
-      # --- Router 1: Domain-based routing ---
-      # Access via: http://app1.localhost
-      - "traefik.http.routers.app1.rule=Host(`app1.localhost`)"
-      - "traefik.http.routers.app1.entrypoints=web"
-
-      # --- Router 2: Path-based routing ---
-      # Access via: http://localhost/app1
-      - "traefik.http.routers.app1-path.rule=Host(`localhost`) && PathPrefix(`/app1`)"
-      - "traefik.http.routers.app1-path.entrypoints=web"
-      - "traefik.http.routers.app1-path.middlewares=app1-stripprefix"
-
-      # --- Middleware: StripPrefix ---
-      # Removes /app1 from the path before forwarding to Nginx
-      # Without this, Nginx would receive /app1 and return 404
-      - "traefik.http.middlewares.app1-stripprefix.stripprefix.prefixes=/app1"
-    networks:
-      - traefik-net
-
-  # ===========================================================================
-  # APP 2 — Simple HTML page (Nginx)
-  # Demonstrates: same routing + custom response header middleware
-  # ===========================================================================
-  app2:
-    image: nginx:alpine
-    container_name: app2
-    volumes:
-      - ./app2/index.html:/usr/share/nginx/html/index.html:ro
-    labels:
-      - "traefik.enable=true"
-
-      # --- Router 1: Domain-based routing ---
-      # Access via: http://app2.localhost
-      - "traefik.http.routers.app2.rule=Host(`app2.localhost`)"
-      - "traefik.http.routers.app2.entrypoints=web"
-      - "traefik.http.routers.app2.middlewares=app2-headers"
-
-      # --- Router 2: Path-based routing ---
-      # Access via: http://localhost/app2
-      - "traefik.http.routers.app2-path.rule=Host(`localhost`) && PathPrefix(`/app2`)"
-      - "traefik.http.routers.app2-path.entrypoints=web"
-      - "traefik.http.routers.app2-path.middlewares=app2-stripprefix,app2-headers"
-
-      # --- Middleware: StripPrefix ---
-      - "traefik.http.middlewares.app2-stripprefix.stripprefix.prefixes=/app2"
-
-      # --- Middleware: Custom Headers ---
-      # Adds a custom response header (visible with curl -v)
-      - "traefik.http.middlewares.app2-headers.headers.customresponseheaders.X-Served-By=app2"
-    networks:
-      - traefik-net
-
-  # ===========================================================================
-  # API — Mock JSON API (Nginx serving JSON)
-  # Demonstrates: domain routing + basicauth middleware
-  # ===========================================================================
+  # ---------------------------------------------------------------------------
+  # FASTAPI — the application
+  # ---------------------------------------------------------------------------
   api:
-    image: nginx:alpine
-    container_name: api
-    volumes:
-      - ./api/data.json:/usr/share/nginx/html/data.json:ro
-      - ./api/default.conf:/etc/nginx/conf.d/default.conf:ro
+    build: ./app
+    container_name: fastapi
+    restart: unless-stopped
+    # No published ports — traffic comes only through Traefik
     labels:
       - "traefik.enable=true"
 
-      # --- Router: Domain-based routing with auth ---
-      # Access via: http://api.localhost (requires username: user, password: traefik)
-      - "traefik.http.routers.api.rule=Host(`api.localhost`)"
-      - "traefik.http.routers.api.entrypoints=web"
+      # --- Router: route HTTPS traffic to the FastAPI container ---
+      # Accessible at https://api.YOURDOMAIN.com
+      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.routers.api.middlewares=api-auth"
 
-      # --- Middleware: Basic Auth ---
-      # Username: user | Password: traefik
-      # Note: $ signs are escaped as $$ in docker-compose
-      - "traefik.http.middlewares.api-auth.basicauth.users=user:$$2y$$05$$8mZ1fMJ5GDqnnSnKolzuZOf4IbFGHEq52oGFbXdK5ewE81FgqTAVG"
+      # Tell Traefik which port FastAPI listens on inside the container
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
+
+      # --- Basic Auth for the API ---
+      # Generate the hash:  htpasswd -nB user | sed 's/\$/\$\$/g'
+      # Then replace the value below
+      - "traefik.http.middlewares.api-auth.basicauth.users=${API_AUTH}"
     networks:
       - traefik-net
 
 # =============================================================================
-# NETWORK — Shared network for all services
+# NETWORK — all services share this network so Traefik can reach them
 # =============================================================================
 networks:
   traefik-net:

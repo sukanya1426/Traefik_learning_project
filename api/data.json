@@ -1,6 +1,0 @@
-{
-  "status": "ok",
-  "service": "api",
-  "message": "Hello from the API behind Traefik!",
-  "version": "1.0.0"
-}

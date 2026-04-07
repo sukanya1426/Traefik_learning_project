@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FastAPI Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #1a202c;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1a202c;
+      color: #fff;
+      padding: 18px 40px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.3px; }
+    .pill {
+      background: #2d3748;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      color: #a0aec0;
+    }
+    header .spacer { flex: 1; }
+    header a {
+      color: #90cdf4;
+      font-size: 0.82rem;
+      text-decoration: none;
+      margin-left: 16px;
+    }
+    header a:hover { color: #fff; }
+
+    /* ── Base-URL bar ── */
+    .url-bar {
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 12px 40px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .url-bar label { font-size: 0.8rem; font-weight: 600; color: #4a5568; white-space: nowrap; }
+    .url-bar input {
+      flex: 1; max-width: 380px;
+      padding: 7px 12px;
+      border: 1.5px solid #cbd5e0;
+      border-radius: 7px;
+      font-size: 0.88rem;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .url-bar input:focus { border-color: #667eea; }
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #68d391;
+      flex-shrink: 0;
+      transition: background .3s;
+    }
+    .dot.offline { background: #fc8181; }
+    .dot.checking { background: #f6ad55; }
+    .ping-btn {
+      padding: 7px 16px;
+      background: #edf2f7;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 7px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #4a5568;
+      transition: background .15s;
+    }
+    .ping-btn:hover { background: #e2e8f0; }
+
+    /* ── Main ── */
+    main {
+      max-width: 860px;
+      margin: 36px auto;
+      padding: 0 20px 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: #a0aec0;
+      margin-top: 14px;
+      margin-bottom: 2px;
+      padding-left: 4px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+      overflow: hidden;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 1.5px solid transparent;
+      transition: background .12s;
+    }
+    .card-head:hover { background: #f7fafc; }
+    .card-head.open { border-bottom-color: #e2e8f0; }
+
+    .badge {
+      font-size: 0.7rem;
+      font-weight: 800;
+      font-family: 'SF Mono', monospace;
+      padding: 4px 10px;
+      border-radius: 6px;
+      min-width: 60px;
+      text-align: center;
+    }
+    .GET    { background: #ebf8ff; color: #2b6cb0; }
+    .POST   { background: #f0fff4; color: #276749; }
+    .DELETE { background: #fff5f5; color: #c53030; }
+
+    .path {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.92rem;
+      color: #2d3748;
+      font-weight: 500;
+    }
+    .desc { font-size: 0.8rem; color: #a0aec0; margin-left: auto; }
+    .chevron { font-size: 0.7rem; color: #cbd5e0; margin-left: 6px; transition: transform .2s; }
+    .card-head.open .chevron { transform: rotate(180deg); }
+
+    /* ── Card body ── */
+    .card-body { display: none; padding: 20px 20px; }
+    .card-body.open { display: block; }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #4a5568;
+      margin-bottom: 5px;
+    }
+    .req { color: #e53e3e; margin-left: 2px; }
+    .form-group input {
+      width: 100%;
+      max-width: 360px;
+      padding: 8px 12px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 7px;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .form-group input:focus { border-color: #667eea; }
+
+    .send-btn {
+      background: #667eea;
+      color: #fff;
+      border: none;
+      padding: 9px 22px;
+      border-radius: 7px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, opacity .15s;
+    }
+    .send-btn:hover { background: #5a67d8; }
+    .send-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .delete-btn { background: #e53e3e; }
+    .delete-btn:hover { background: #c53030; }
+
+    /* ── Response ── */
+    .response { margin-top: 16px; display: none; }
+    .response.show { display: block; }
+    .res-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .res-label { font-size: 0.78rem; font-weight: 600; color: #4a5568; }
+    .status {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 5px;
+    }
+    .s2 { background: #f0fff4; color: #276749; }
+    .s4 { background: #fff5f5; color: #c53030; }
+    .s5 { background: #fff5f5; color: #9b2c2c; }
+    .se { background: #fffaf0; color: #c05621; }
+
+    .res-body {
+      background: #1a202c;
+      color: #9ae6b4;
+      padding: 14px 16px;
+      border-radius: 8px;
+      font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+      font-size: 0.8rem;
+      line-height: 1.65;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .res-body.err { color: #fc8181; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>FastAPI Dashboard</h1>
+  <span class="pill">v1.0.0</span>
+  <span class="spacer"></span>
+  <a href="/docs" target="_blank">Swagger UI ↗</a>
+  <a href="/redoc" target="_blank">ReDoc ↗</a>
+</header>
+
+<div class="url-bar">
+  <label>Base URL</label>
+  <div class="dot checking" id="dot"></div>
+  <input id="baseUrl" type="text" value="http://localhost:8000" />
+  <button class="ping-btn" onclick="ping()">Ping</button>
+</div>
+
+<main>
+
+  <!-- General -->
+  <p class="section-label">General</p>
+
+  <!-- GET / -->
+  <div class="card">
+    <div class="card-head" onclick="toggle(this)">
+      <span class="badge GET">GET</span>
+      <span class="path">/info</span>
+      <span class="desc">Welcome message</span>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="card-body">
+      <button class="send-btn" onclick="send(this,'GET','/info')">Send</button>
+      <div class="response">
+        <div class="res-meta"><span class="res-label">Response</span><span class="status"></span></div>
+        <pre class="res-body"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- GET /health -->
+  <div class="card">
+    <div class="card-head" onclick="toggle(this)">
+      <span class="badge GET">GET</span>
+      <span class="path">/health</span>
+      <span class="desc">Health check</span>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="card-body">
+      <button class="send-btn" onclick="send(this,'GET','/health')">Send</button>
+      <div class="response">
+        <div class="res-meta"><span class="res-label">Response</span><span class="status"></span></div>
+        <pre class="res-body"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Items -->
+  <p class="section-label">Items</p>
+
+  <!-- GET /items -->
+  <div class="card">
+    <div class="card-head" onclick="toggle(this)">
+      <span class="badge GET">GET</span>
+      <span class="path">/items</span>
+      <span class="desc">List all items</span>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="card-body">
+      <button class="send-btn" onclick="send(this,'GET','/items')">Send</button>
+      <div class="response">
+        <div class="res-meta"><span class="res-label">Response</span><span class="status"></span></div>
+        <pre class="res-body"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- GET /items/{id} -->
+  <div class="card">
+    <div class="card-head" onclick="toggle(this)">
+      <span class="badge GET">GET</span>
+      <span class="path">/items/{id}</span>
+      <span class="desc">Get item by ID</span>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Item ID <span class="req">*</span></label>
+        <input id="g-id" type="number" placeholder="e.g. 1" min="1" />
+      </div>
+      <button class="send-btn" onclick="sendWithId(this,'GET','/items/',document.getElementById('g-id').value)">Send</button>
+      <div class="response">
+        <div class="res-meta"><span class="res-label">Response</span><span class="status"></span></div>
+        <pre class="res-body"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- POST /items -->
+  <div class="card">
+    <div class="card-head" onclick="toggle(this)">
+      <span class="badge POST">POST</span>
+      <span class="path">/items</span>
+      <span class="desc">Create a new item</span>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Name <span class="req">*</span></label>
+        <input id="p-name" type="text" placeholder="e.g. Widget" />
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <input id="p-desc" type="text" placeholder="Optional" />
+      </div>
+      <div class="form-group">
+        <label>Price <span class="req">*</span></label>
+        <input id="p-price" type="number" placeholder="e.g. 9.99" step="0.01" min="0" />
+      </div>
+      <button class="send-btn" onclick="createItem(this)">Send</button>
+      <div class="response">
+        <div class="res-meta"><span class="res-label">Response</span><span class="status"></span></div>
+        <pre class="res-body"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELETE /items/{id} -->
+  <div class="card">
+    <div class="card-head" onclick="toggle(this)">
+      <span class="badge DELETE">DELETE</span>
+      <span class="path">/items/{id}</span>
+      <span class="desc">Delete an item</span>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Item ID <span class="req">*</span></label>
+        <input id="d-id" type="number" placeholder="e.g. 1" min="1" />
+      </div>
+      <button class="send-btn delete-btn" onclick="deleteItem(this)">Send</button>
+      <div class="response">
+        <div class="res-meta"><span class="res-label">Response</span><span class="status"></span></div>
+        <pre class="res-body"></pre>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  const base = () => document.getElementById('baseUrl').value.replace(/\/$/, '');
+
+  // Toggle card open/close
+  function toggle(head) {
+    head.classList.toggle('open');
+    head.nextElementSibling.classList.toggle('open');
+  }
+
+  // Show a response inside the nearest .response block
+  function showRes(btn, code, data, isErr = false) {
+    const area = btn.parentElement.querySelector('.response');
+    const statusEl = area.querySelector('.status');
+    const bodyEl   = area.querySelector('.res-body');
+
+    area.classList.add('show');
+    statusEl.textContent = code;
+    statusEl.className = 'status ' + (isErr ? 'se' : code >= 500 ? 's5' : code >= 400 ? 's4' : 's2');
+    bodyEl.className  = 'res-body' + (isErr ? ' err' : '');
+    bodyEl.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  }
+
+  // Generic fetch wrapper
+  async function send(btn, method, path, body = null) {
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    try {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(base() + path, opts);
+      let data;
+      try   { data = await res.json(); }
+      catch { data = res.status === 204 ? '(204 No Content)' : '(no body)'; }
+      showRes(btn, res.status, data);
+    } catch (e) {
+      showRes(btn, 'ERR', e.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Send';
+    }
+  }
+
+  function sendWithId(btn, method, prefix, id) {
+    if (!id) { alert('Please enter an ID.'); return; }
+    send(btn, method, prefix + id);
+  }
+
+  function createItem(btn) {
+    const name  = document.getElementById('p-name').value.trim();
+    const desc  = document.getElementById('p-desc').value.trim();
+    const price = parseFloat(document.getElementById('p-price').value);
+    if (!name || isNaN(price)) { alert('Name and Price are required.'); return; }
+    const body = { name, price };
+    if (desc) body.description = desc;
+    send(btn, 'POST', '/items', body);
+  }
+
+  function deleteItem(btn) {
+    const id = document.getElementById('d-id').value;
+    if (!id) { alert('Please enter an ID.'); return; }
+    if (!confirm(`Delete item ${id}? This cannot be undone.`)) return;
+    send(btn, 'DELETE', '/items/' + id);
+  }
+
+  // Ping / health check
+  async function ping() {
+    const dot = document.getElementById('dot');
+    dot.className = 'dot checking';
+    try {
+      const res = await fetch(base() + '/health');
+      dot.className = 'dot' + (res.ok ? '' : ' offline');
+    } catch {
+      dot.className = 'dot offline';
+    }
+  }
+
+  ping(); // ping on page load
+</script>
+</body>
+</html>

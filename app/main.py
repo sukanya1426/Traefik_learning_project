@@ -1,13 +1,28 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
+import os
 
 app = FastAPI(
     title="Traefik FastAPI Demo",
     description="FastAPI app running behind Traefik with HTTPS and basic auth on Hetzner",
     version="1.0.0",
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve static files (the dashboard UI)
+_static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 
 # ---------------------------------------------------------------------------
@@ -43,8 +58,16 @@ _next_id = 4
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.get("/")
-def root():
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def ui():
+    """Serve the dashboard UI."""
+    with open(os.path.join(_static_dir, "index.html")) as f:
+        return f.read()
+
+
+@app.get("/info")
+def info():
+    """API info / welcome message."""
     return {
         "message": "Hello from FastAPI + Traefik!",
         "timestamp": datetime.utcnow().isoformat() + "Z",

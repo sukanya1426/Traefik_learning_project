@@ -39,7 +39,7 @@ certificatesResolvers:
     acme:
       # Let's Encrypt will send important emails (expiry warnings) here.
       # Overridden by the LETSENCRYPT_EMAIL env var passed from docker-compose.
-      email: "${LETSENCRYPT_EMAIL}"
+      email: "bsse1426@iit.du.ac.bd"
       # Where to persist the certificate + private key.
       # This file must exist on the host with chmod 600 before first run.
       storage: /letsencrypt/acme.json

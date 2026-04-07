@@ -54,6 +54,7 @@ scp traefik/traefik.yml       "$SSH_ALIAS:$REMOTE_DIR/traefik/"
 scp app/main.py               "$SSH_ALIAS:$REMOTE_DIR/app/"
 scp app/requirements.txt      "$SSH_ALIAS:$REMOTE_DIR/app/"
 scp app/Dockerfile            "$SSH_ALIAS:$REMOTE_DIR/app/"
+scp -r app/static             "$SSH_ALIAS:$REMOTE_DIR/app/"
 
 # ---- 4. Set up acme.json with correct permissions ---------------------------
 echo ""
